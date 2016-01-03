@@ -11,9 +11,8 @@ class line(object):
 		if '_start' in args: self.start = args['_start']
 		if '_end' in args: self.end = args['_end']
 		if '_m' in args: self.m = args['_m']
-		if '_point' in args: self.point = args['point']
-
-		if '_b' in args: self.b = args['b']
+		if '_point' in args: self.point = args['_point']
+		if '_b' in args: self.b = args['_b']
 		
 		#Valid configuration 1
 		if not self.m and self.start and self.end: #if m is missing, but endpoints exist
@@ -28,10 +27,7 @@ class line(object):
 		#b = y - mx
 		self.b = self.point[1] - (self.m * self.point[0])
 
-		
-
-	def draw(self, surf):
-		RED = (255, 0, 0)
+	def draw(self, surf, color=(255, 0, 0)):
 		#pygame needs a start and end point, so we have to generate them if they don't exist. This is only needed for drawing, a y=mx+b model suits the rest of the math better
 		if not self.start or not self.end:
 			lowx = self.point[0] * -100
@@ -39,15 +35,13 @@ class line(object):
 			self.start = (lowx, lowx * self.m + self.b)
 			self.end = (highx, highx * self.m + self.b)
 
-		pygame.draw.line(surf, RED, self.start, self.end, 2)
+		pygame.draw.line(surf, color, self.start, self.end, 2)
 
 	def print_values(self):
 		print("Start = ", self.start, "\nEnd = ", self.end, "\nm = ", self.m, "\nb = ", self.b, "\npoint = ", self.point)
 
 class imageClass(object):
 	def __init__(self, arg1):#arg1 is board side length
-		#testing
-		x = line(_start=(10,10), _end=(40,40))	
 		#load image
 		self.loadedImage = pygame.image.load('images/1.png')
 		self.imageSize = self.loadedImage.get_size()
@@ -87,10 +81,6 @@ class imageClass(object):
 					maximum = blackDist
 
 				self.quantizedImage.set_at((x, y), maximum[1])
-		#for testing
-		# self.screen.blit(self.quantizedImage, (0, 0))
-		# pygame.display.flip()
-		# time.sleep(10)
 
 	#http://void.printf.net/~mad/Perspective/
 	def discoverBoard(self):
@@ -99,30 +89,52 @@ class imageClass(object):
 		discoveredOverlay.set_colorkey((0, 0, 0))
 
 		#boardLines[0] is top, increasing clockwise
-		boardLines = self.get_corners()
-
-		for l in boardLines:
+		bL = self.get_corners()
+		#testing
+		for l in bL:
 			l.draw(discoveredOverlay)
 
-		x1 = (boardLines[2].b - boardLines[0].b) / (boardLines[0].m - boardLines[2].m)
-		y1 = boardLines[0].m * x1 + boardLines[0].b
+		int1 = self.get_intersection(bL[0], bL[2])
+		int2 = self.get_intersection(bL[1], bL[3])
+		horizon = line(_start=int1, _end=int2)
+		
+		leveledHorizon = line(_m=horizon.m, _point=(50, 50))
+		leveledHorizon.print_values()
 
-		x2 = (boardLines[1].b - boardLines[3].b) / (boardLines[3].m - boardLines[1].m)
-		y2 = boardLines[3].m * x1 + boardLines[3].b
+		#find intersections with the leveledHorizon
+
+		horint0 = self.get_intersection(bL[0], leveledHorizon)
+		horint2 = self.get_intersection(bL[2], leveledHorizon)
+
+		subLineArray = self.subdivide(line(_start=horint0, _end=horint2), int1)
+
+		for z in subLineArray:
+			z.print_values()
+			z.draw(discoveredOverlay, (0, 0, 255))
 
 		
-		leveledHorizon = line(boardLines[0].start, _m=line((x1, y1), (x2, y2)).m)
-		leveledHorizon.print_values()
-		leveledHorizon.draw(discoveredOverlay)
-
-
-
 
 		self.screen.blit(discoveredOverlay, (0, 0))
 		pygame.display.flip()
 		time.sleep(10)
 
+	def get_intersection(self, line1, line2):
+		x = (line2.b - line1.b) / (line1.m - line2.m)
+		y = (line1.m * x) + line1.b
 
+		return((x, y))
+
+	def subdivide(self, line1, horizonpoint):
+		lineArray = []
+		deltax = (line1.start[0] - line1.end[0]) / self.boardSize
+
+		for z in range(1, self.boardSize-1):
+			tmpx = line1.start[0] + (deltax * z)
+			tmpy = tmpx * line1.m + line1.b
+			subint = (tmpx, tmpy)
+			lineArray.append(line(_start=subint, _end=horizonpoint))
+
+		return(lineArray)
 
 	def get_corners(self):
 		corners = [None, None, None, None]
@@ -146,7 +158,6 @@ class imageClass(object):
 					sys.exit()
 		#end of while
 		for z in range(4):
-			lines[z] = line(corners[z], corners[(z+1)%4])
+			lines[z] = line(_start=corners[z], _end=corners[(z+1)%4])
 
 		return(lines)
-
