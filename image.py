@@ -2,26 +2,52 @@ import pygame, sys, os, time, math
 from pygame.locals import *
 
 class line(object):
-	def __init__(self, _start, _end, _m=None):
+	def __init__(self, **args): #possible args: _start, _end, _m, _b, _point
 		#y = mx + b
-		self.start = _start
-		self.end = _end
-		if (not _m):
+
+		#variable declaration
+		self.start, self.end, self.m, self.b, self.point = (None,)*5
+
+		if '_start' in args: self.start = args['_start']
+		if '_end' in args: self.end = args['_end']
+		if '_m' in args: self.m = args['_m']
+		if '_point' in args: self.point = args['point']
+
+		if '_b' in args: self.b = args['b']
+		
+		#Valid configuration 1
+		if not self.m and self.start and self.end: #if m is missing, but endpoints exist
 			self.m = (self.start[1] - self.end[1])/(self.start[0] - self.end[0])
-		else:
-			self.m = _m
-		self.b = -(self.m * self.start[0]) + self.start[1]
+			#average point between start and end
+			self.point = ((self.start[0] + self.end[0]) / 2, (self.start[1] + self.end[1]) / 2)
+	
+		#Valid configuration 2
+		elif self.m and self.point: pass #if point and m exist
+		else: print("Not enough info supplied for line creation")
+
+		#b = y - mx
+		self.b = self.point[1] - (self.m * self.point[0])
+
+		
 
 	def draw(self, surf):
 		RED = (255, 0, 0)
+		#pygame needs a start and end point, so we have to generate them if they don't exist. This is only needed for drawing, a y=mx+b model suits the rest of the math better
+		if not self.start or not self.end:
+			lowx = self.point[0] * -100
+			highx = self.point[0] * 100
+			self.start = (lowx, lowx * self.m + self.b)
+			self.end = (highx, highx * self.m + self.b)
+
 		pygame.draw.line(surf, RED, self.start, self.end, 2)
 
 	def print_values(self):
-		print("Start = ", self.start, "\nEnd = ", self.end, "\nm = ", self.m, "\nb = ", self.b)
+		print("Start = ", self.start, "\nEnd = ", self.end, "\nm = ", self.m, "\nb = ", self.b, "\npoint = ", self.point)
 
 class imageClass(object):
 	def __init__(self, arg1):#arg1 is board side length
-		super(imageClass, self).__init__()
+		#testing
+		x = line(_start=(10,10), _end=(40,40))	
 		#load image
 		self.loadedImage = pygame.image.load('images/1.png')
 		self.imageSize = self.loadedImage.get_size()
@@ -85,7 +111,7 @@ class imageClass(object):
 		y2 = boardLines[3].m * x1 + boardLines[3].b
 
 		
-		leveledHorizon = line(boardLines[0].start, boardLines[0].end, line((x1, y1), (x2, y2)).m)
+		leveledHorizon = line(boardLines[0].start, _m=line((x1, y1), (x2, y2)).m)
 		leveledHorizon.print_values()
 		leveledHorizon.draw(discoveredOverlay)
 
