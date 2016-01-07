@@ -2,49 +2,39 @@ import pygame, sys, os, time, math
 from pygame.locals import *
 
 class line(object):
-	def __init__(self): #y = mx + b
-		
+	def __init__(self, **args): #possible args: _start, _end, _m, _b, _point
+		#y = mx + b
+
 		#variable declaration
 		self.start, self.end, self.m, self.b, self.point = (None,)*5
 
-	#line object creator
-	def fromEndpoints(self, _start, _end):
-		tmp = line()
-		tmp.start = _start
-		tmp.end = _end
+		# if '_start' in args: self.start = args['_start']
+		# if '_end' in args: self.end = args['_end']
+		# if '_m' in args: self.m = args['_m']
+		# if '_point' in args: self.point = args['_point']
+		# if '_b' in args: self.b = args['_b']
 		
-		#0 division check
-		if (tmp.start[0] == tmp.end[0]): tmp.start[0] += 1
+		#Valid configuration 1
+		if not self.m and self.start and self.end: #if m is missing, but endpoints exist
+			self.m = (self.start[1] - self.end[1])/(self.start[0] - self.end[0])
+			#average point between start and end
+			self.point = ((self.start[0] + self.end[0]) / 2, (self.start[1] + self.end[1]) / 2)
+	
+		#Valid configuration 2
+		elif self.m and self.point: pass #if point and m exist
+		else: print("Not enough info supplied for line creation")
 
-		tmp.m = (tmp.start[1] - tmp.end[1])/(tmp.start[0] - tmp.end[0])
-		tmp.point = ((tmp.start[0] + tmp.end[0]) / 2, (tmp.start[1] + tmp.end[1]) / 2)
-
-		tmp.b = self.findB(tmp)
-
-
-		return(tmp)
-
-	#line object creator
-	def fromSlope(self, _m, _point):
-		tmp = line()
-		tmp.m = _m
-		tmp.point = _point
-
-		tmp.b = self.findB(tmp)
-
-		#generate start and end for line. 
-		tmp.start = (0, tmp.b)
-		tmp.end = (imageClass.imageSize[0], imageClass.imageSize[0] * tmp.m + tmp.b)
-		
-		return(tmp)
-
-	def findB(self, line=None):
-		if not line: line = self
-		x = math.fabs(line.point[1] - (line.m * line.point[0]))
-		return(x)
+		#b = y - mx
+		self.b = self.point[1] - (self.m * self.point[0])
 
 	def draw(self, surf, color=(255, 0, 0)):
 		#pygame needs a start and end point, so we have to generate them if they don't exist. This is only needed for drawing, a y=mx+b model suits the rest of the math better
+		if not self.start or not self.end:
+			lowx = self.point[0] * -100
+			highx = self.point[0] * 100
+			self.start = (lowx, lowx * self.m + self.b)
+			self.end = (highx, highx * self.m + self.b)
+
 		pygame.draw.line(surf, color, self.start, self.end, 2)
 
 	def print_values(self):
@@ -53,8 +43,8 @@ class line(object):
 class imageClass(object):
 	def __init__(self, arg1):#arg1 is board side length
 		#load image
-		self.loadedImage = pygame.image.load('images/4.png')
-		imageClass.imageSize = self.loadedImage.get_size()
+		self.loadedImage = pygame.image.load('images/1.png')
+		self.imageSize = self.loadedImage.get_size()
 		#quantized image
 		self.quantizedImage = self.loadedImage.copy()
 
@@ -70,12 +60,6 @@ class imageClass(object):
 
 		self.quantize()
 		self.discoverBoard()
-
-	def waitForExit(self):
-		while(True):
-			for event in pygame.event.get():
-				if (event.type == QUIT):
-					sys.exit()
 
 	def quantize(self):
 		BROWN = (165, 130, 100)
@@ -101,9 +85,8 @@ class imageClass(object):
 	#http://void.printf.net/~mad/Perspective/
 	def discoverBoard(self):
 		
-
 		discoveredOverlay = pygame.Surface(self.imageSize)
-		discoveredOverlay.set_colorkey((0, 0, 0)) #makes overlay transparent
+		discoveredOverlay.set_colorkey((0, 0, 0))
 
 		#boardLines[0] is top, increasing clockwise
 		bL = self.get_corners()
@@ -113,50 +96,43 @@ class imageClass(object):
 
 		int1 = self.get_intersection(bL[0], bL[2])
 		int2 = self.get_intersection(bL[1], bL[3])
-		horizon = line().fromEndpoints(_start=int1, _end=int2)
-
-		#horizon's  location
-		tmppoint = (bL[1].end[0] + 50, bL[1].end[1] + 50)
-		leveledHorizon = line().fromSlope(_m=-horizon.m, _point=tmppoint)
+		horizon = line(_start=int1, _end=int2)
 		
-
-		print("leveledHorizon: ",)
+		leveledHorizon = line(_m=horizon.m, _point=(50, 50))
 		leveledHorizon.print_values()
-		leveledHorizon.draw(discoveredOverlay, (0, 255, 0))
 
 		#find intersections with the leveledHorizon
+
 		horint0 = self.get_intersection(bL[0], leveledHorizon)
 		horint2 = self.get_intersection(bL[2], leveledHorizon)
 
-		subLineArray = self.subdivide(line().fromEndpoints(_start=horint0, _end=horint2), int1)
+		subLineArray = self.subdivide(line(_start=horint0, _end=horint2), int1)
 
 		for z in subLineArray:
-			#z.print_values()
+			z.print_values()
 			z.draw(discoveredOverlay, (0, 0, 255))
+
+		
 
 		self.screen.blit(discoveredOverlay, (0, 0))
 		pygame.display.flip()
-		self.waitForExit()
+		time.sleep(10)
 
 	def get_intersection(self, line1, line2):
-		if line1.m != line2.m:
-			x = (line2.b - line1.b) / (line1.m - line2.m)
-			y = (line2.m * x) + line2.b
-		else:
-			return False
+		x = (line2.b - line1.b) / (line1.m - line2.m)
+		y = (line1.m * x) + line1.b
 
 		return((x, y))
 
 	def subdivide(self, line1, horizonpoint):
 		lineArray = []
-		deltax = math.fabs((line1.start[0] - line1.end[0]) / (self.boardSize - 1))
-		print(deltax)
+		deltax = (line1.start[0] - line1.end[0]) / self.boardSize
 
-		for z in range(self.boardSize):
-			tmpx = line1.end[0] + (deltax * z)
+		for z in range(1, self.boardSize-1):
+			tmpx = line1.start[0] + (deltax * z)
 			tmpy = tmpx * line1.m + line1.b
 			subint = (tmpx, tmpy)
-			lineArray.append(line().fromEndpoints(_start=subint, _end=horizonpoint))
+			lineArray.append(line(_start=subint, _end=horizonpoint))
 
 		return(lineArray)
 
@@ -164,26 +140,24 @@ class imageClass(object):
 		corners = [None, None, None, None]
 		lines = [None, None, None, None]
 
-		# counter = 0
+		counter = 0
 
-		# print("click each corner of the board. Start at top left and move clockwise.")
-		# happening = True
-		# while (happening):
-		# 	for event in pygame.event.get():
-		# 		if counter >= 4:
-		# 			happening = False
-		# 			break
+		print("click each corner of the board. Start at top left and move clockwise.")
+		happening = True
+		while (happening):
+			for event in pygame.event.get():
+				if counter >= 4:
+					happening = False
+					break
 
-		# 		if (event.type == MOUSEBUTTONDOWN):
-		# 			corners[counter] = (event.pos[0], event.pos[1])
-		# 			counter += 1
-		# 			print(counter, "clicked.")
-		# 		elif (event.type == QUIT):
-		# 			sys.exit()
-		# #end of while
-		HIJACK = [(98, 132), (381, 135), (422, 404), (30, 388)]
-		corners = HIJACK
+				if (event.type == MOUSEBUTTONDOWN):
+					corners[counter] = (event.pos[0], event.pos[1])
+					counter += 1
+					print(counter, "clicked.")
+				elif (event.type == QUIT):
+					sys.exit()
+		#end of while
 		for z in range(4):
-			lines[z] = line().fromEndpoints(_start=corners[z], _end=corners[(z+1)%4])
+			lines[z] = line(_start=corners[z], _end=corners[(z+1)%4])
 
 		return(lines)
