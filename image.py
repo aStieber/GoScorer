@@ -2,39 +2,47 @@ import pygame, sys, os, time, math
 from pygame.locals import *
 
 class line(object):
-	def __init__(self, **args): #possible args: _start, _end, _m, _b, _point
-		#y = mx + b
-
+	def __init__(self): #y = mx + b
+		
 		#variable declaration
 		self.start, self.end, self.m, self.b, self.point = (None,)*5
 
-		if '_start' in args: self.start = args['_start']
-		if '_end' in args: self.end = args['_end']
-		if '_m' in args: self.m = args['_m']
-		if '_point' in args: self.point = args['_point']
-		if '_b' in args: self.b = args['_b']
+	#line object creator
+	def fromEndpoints(self, _start, _end):
+		tmp = line()
+		tmp.start = _start
+		tmp.end = _end
 		
-		#Valid configuration 1
-		if not self.m and self.start and self.end: #if m is missing, but endpoints exist
-			self.m = (self.start[1] - self.end[1])/(self.start[0] - self.end[0])
-			#average point between start and end
-			self.point = ((self.start[0] + self.end[0]) / 2, (self.start[1] + self.end[1]) / 2)
-	
-		#Valid configuration 2
-		elif self.m and self.point: pass #if point and m exist
-		else: print("Not enough info supplied for line creation")
+		tmp.m = (tmp.start[1] - tmp.end[1])/(tmp.start[0] - tmp.end[0])
+		tmp.point = ((tmp.start[0] + tmp.end[0]) / 2, (tmp.start[1] + tmp.end[1]) / 2)
 
-		#b = y - mx
-		self.b = self.point[1] - (self.m * self.point[0])
+		tmp.b = self.genB(tmp)
+
+
+		return(tmp)
+
+	#line object creator
+	def fromSlope(self, _m, _point):
+		tmp = line()
+		tmp.m = _m
+		tmp.point = _point
+
+		tmp.b = self.genB(tmp)
+
+		lowx = -(tmp.point[0] * 10)
+		highx = tmp.point[0] * 10
+		tmp.start = (lowx, lowx * tmp.m + tmp.b)
+		tmp.end = (highx, highx * tmp.m + tmp.b)
+
+		return(tmp)
+
+	def genB(self, line):
+		x = math.fabs(line.point[1] - (line.m * line.point[0]))
+		return(x)
+
 
 	def draw(self, surf, color=(255, 0, 0)):
 		#pygame needs a start and end point, so we have to generate them if they don't exist. This is only needed for drawing, a y=mx+b model suits the rest of the math better
-		if not self.start or not self.end:
-			lowx = self.point[0] * -100
-			highx = self.point[0] * 100
-			self.start = (lowx, lowx * self.m + self.b)
-			self.end = (highx, highx * self.m + self.b)
-
 		pygame.draw.line(surf, color, self.start, self.end, 2)
 
 	def print_values(self):
@@ -43,7 +51,7 @@ class line(object):
 class imageClass(object):
 	def __init__(self, arg1):#arg1 is board side length
 		#load image
-		self.loadedImage = pygame.image.load('images/1.png')
+		self.loadedImage = pygame.image.load('images/4.png')
 		self.imageSize = self.loadedImage.get_size()
 		#quantized image
 		self.quantizedImage = self.loadedImage.copy()
@@ -60,6 +68,12 @@ class imageClass(object):
 
 		self.quantize()
 		self.discoverBoard()
+
+	def waitForExit(self):
+		while(True):
+			for event in pygame.event.get():
+				if (event.type == QUIT):
+					sys.exit()
 
 	def quantize(self):
 		BROWN = (165, 130, 100)
@@ -96,43 +110,39 @@ class imageClass(object):
 
 		int1 = self.get_intersection(bL[0], bL[2])
 		int2 = self.get_intersection(bL[1], bL[3])
-		horizon = line(_start=int1, _end=int2)
+		horizon = line().fromEndpoints(_start=int1, _end=int2)
 		
-		leveledHorizon = line(_m=horizon.m, _point=(50, 50))
-		leveledHorizon.print_values()
+		leveledHorizon = line().fromSlope(_m=horizon.m, _point=(25, 25))
 
 		#find intersections with the leveledHorizon
 
 		horint0 = self.get_intersection(bL[0], leveledHorizon)
 		horint2 = self.get_intersection(bL[2], leveledHorizon)
 
-		subLineArray = self.subdivide(line(_start=horint0, _end=horint2), int1)
+		subLineArray = self.subdivide(line().fromEndpoints(_start=horint0, _end=horint2), int1)
 
 		for z in subLineArray:
-			z.print_values()
 			z.draw(discoveredOverlay, (0, 0, 255))
-
-		
 
 		self.screen.blit(discoveredOverlay, (0, 0))
 		pygame.display.flip()
-		time.sleep(10)
+		self.waitForExit()
 
 	def get_intersection(self, line1, line2):
 		x = (line2.b - line1.b) / (line1.m - line2.m)
-		y = (line1.m * x) + line1.b
+		y = (line2.m * x) + line2.b
 
 		return((x, y))
 
 	def subdivide(self, line1, horizonpoint):
 		lineArray = []
-		deltax = (line1.start[0] - line1.end[0]) / self.boardSize
+		deltax = math.fabs((line1.start[0] - line1.end[0]) / (self.boardSize - 1))
 
-		for z in range(1, self.boardSize-1):
+		for z in range(self.boardSize):
 			tmpx = line1.start[0] + (deltax * z)
 			tmpy = tmpx * line1.m + line1.b
 			subint = (tmpx, tmpy)
-			lineArray.append(line(_start=subint, _end=horizonpoint))
+			lineArray.append(line().fromEndpoints(_start=subint, _end=horizonpoint))
 
 		return(lineArray)
 
@@ -158,6 +168,6 @@ class imageClass(object):
 					sys.exit()
 		#end of while
 		for z in range(4):
-			lines[z] = line(_start=corners[z], _end=corners[(z+1)%4])
+			lines[z] = line().fromEndpoints(_start=corners[z], _end=corners[(z+1)%4])
 
 		return(lines)
